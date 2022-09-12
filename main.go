@@ -1,3 +1,4 @@
+//Created by Bushra Ashfaque
 package main
 
 import (
@@ -8,7 +9,9 @@ import (
     "github.com/gorilla/mux"
     "io/ioutil"
     "strconv"
-    // "net/url"
+    "database/sql"
+    _ "github.com/lib/pq"
+    // "reflect"
 )
 
 
@@ -69,6 +72,9 @@ func gVariable(w http.ResponseWriter, r *http.Request) {
                 response :="Sum of a and b is " + strconv.Itoa(sum_value)
                 err := json.NewEncoder(w).Encode(&response)
                 fmt.Println(response)
+                insertDynStmt:=`UPDATE "Articles" SET "Content" = $1 WHERE "Id" = $2`
+                var _,e = db.Exec(insertDynStmt,sum_value,article.Id)
+                CheckError(e)
                 if err != nil {
                     log.Fatalln("There was an error encoding the initialized struct")
                 }
@@ -104,7 +110,9 @@ func wVariable(w http.ResponseWriter, r *http.Request) {
             response :="Updated value of "+ article.Id + " is " + strconv.Itoa(Articles[i].Content)
             fmt.Println(response)
             err := json.NewEncoder(w).Encode(&Articles[i].Content)
-
+            insertDynStmt:=`UPDATE "Articles" SET "Content" = $1 WHERE "Id" = $2`
+            var _,e = db.Exec(insertDynStmt,Articles[i].Content,article.Id)
+            CheckError(e)
             if err != nil {
                 log.Fatalln("There was an error encoding the initialized struct")
         }   
@@ -128,7 +136,9 @@ func dVariable(w http.ResponseWriter, r *http.Request) {
             response :="Updated value of "+ article.Id + " is " + strconv.Itoa(Articles[i].Content)
             fmt.Println(response)
             err := json.NewEncoder(w).Encode(&Articles[i].Content)
-
+            insertDynStmt:=`UPDATE "Articles" SET "Content" = $1 WHERE "Id" = $2`
+            var _,e = db.Exec(insertDynStmt,Articles[i].Content,article.Id)
+            CheckError(e)
             if err != nil {
                 log.Fatalln("There was an error encoding the initialized struct")
         }   
@@ -151,7 +161,7 @@ func handleRequests() {
     myRouter.HandleFunc("/update{id}{content}", wVariable).Methods("POST")
     log.Fatal(http.ListenAndServe(":10000", myRouter))
 
-    
+
 }
 
 
@@ -165,14 +175,80 @@ type Article struct {
 // let's declare a global Articles array
 // that we can then populate in our main function
 // to simulate a database
-var Articles = []Article{
-    Article{Id: "a",Title: "variable a", Content: 0},
-    Article{Id: "b",Title: "variable b", Content: 0},
-    Article{Id: "sum",Title: "sum of a and b", Content: 0},
-}
+
+// var Articles = []Article{
+//     Article{Id: "a",Title: "variable a", Content: 0},
+//     Article{Id: "b",Title: "variable b", Content: 0},
+//     Article{Id: "sum",Title: "sum of a and b", Content: 0},
+// }
+
+const (
+    host = "127.0.0.1"
+    port = 5432
+    user = "postgres"
+    password = "new_password"
+    dbname = "RestApi_db"
+)
+var psqlconn = fmt.Sprintf("host= %s port=%d user= %s password =%s dbname = %s sslmode=disable", host, port, user, password, dbname)
+var db,e = sql.Open("postgres", psqlconn)
+var readDb = `Select * from "Articles"`
+var row, err = db.Exec(readDb)
+var Articles []Article 
+// CheckError(err)
 func main() {
     fmt.Println("Rest API v2.0 - Mux Routers")
+
+    CheckError(err)
+    defer db.Close()
+ 
+    get_val := `Select "Title", "Content" FROM "Articles" WHERE "Id"=$1;`
+    arr := [3]string{"a","b","sum"}
+    
+    for j:= 0; j < 3; j++{
+    // fmt.P
+    rows,error := db.Query(get_val, arr[j])
+    // rows, err := db.Query(get_val,"a")
+    CheckError(error)
+    // fmt.Println(reflect.TypeOf(rows))
+    if rows == nil {
+        // panic(err)
+        Articles = []Article{
+        Article{Id: "a",Title: "variable a", Content: 0},
+        Article{Id: "b",Title: "variable b", Content: 0},
+        Article{Id: "sum",Title: "sum of a and b", Content: 0},
+        }
+    }
+
+    
+    defer rows.Close()
+    for rows.Next() {
+    var r_Title string
+    var r_Content int
+ 
+    err = rows.Scan(&r_Title, &r_Content)
+    CheckError(err)
+    CheckError(error)
+
+    
+    
+    // fmt.Println(r_Title, r_Content)
+    Articles = append(Articles,Article{Id: arr[j],Title: r_Title , Content: r_Content})
+    }
+
+    }
+// fmt.Println(Articles)
+
+ 
+            
+    insertStmt := `insert into "Articles"("Id", "Title", "Content") values('a', 'variable a', 0),('b', 'variable b', 0), ('sum', 'sum of a and b', 0) ON CONFLICT DO NOTHING`
+    _, e := db.Exec(insertStmt)
+    CheckError(e)
     handleRequests()
-
-
+    
 }
+func CheckError(err error){
+        if err != nil {
+            panic(err)
+        }
+}
+
